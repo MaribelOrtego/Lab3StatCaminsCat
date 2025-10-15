@@ -1,0 +1,557 @@
+---
+title: "Lab3-Regressió lineal simple complerta "
+subtitle: "
+<div id='logo-nom-subtitle' style='text-align:center;'>
+  <img src='www/logoUPC.png' style='height:50px; display:block; margin:0 auto 5px auto;'>
+  <p style='margin:0; font-weight:bold; color:#0055A4 !important; font-size:16px;'>Maribel Ortego</p>
+</div>"
+author: "Maribel Ortego"
+date: "`r format(Sys.time(), '%Y %B %d')`"
+
+output:
+  learnr::tutorial:
+    progressive: false
+    theme:
+      bslib: true
+      bootswatch: minty
+    css:
+      - "css/styles.css"
+      - "css/hero-image-css-v2.css"
+    includes:
+      in_header: "www/hero-image-PiE.html"
+    number_sections: TRUE
+    toc: true
+    toc_depth: 4
+    toc_float: true
+
+runtime: shiny_prerendered
+bibliography: geyser.bib 
+---
+
+```{r, label="generaloptions", include=FALSE}
+# Configuració general del tutorial
+library(learnr)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.width = 6,
+  out.width = "50%",
+  fig.align = "center",
+  fig.caption = TRUE
+)
+```
+
+# 📌 Introducció
+En aquest Lab2 treballarem amb el conjunt dades  **Geyser**, realitzant una anàlisi descriptiva univariant i bivariada, així com una aproximació a la regressió lineal i la definició de factors.
+
+::: {.infobox .caution data-latex="{caution}"}
+**Recorda establir correctament el directori de treball** abans de començar a llegir les dades.
+:::
+
+## El context: Old Faithful
+
+Old Faithful és un geyser situat al Parc Nacional de Yellowstone (Wyoming, Estats Units), una gran atracció turística.
+A @DenPre1987 es presenten les dades: "Des del dia 1 d'agost al dia 8 d'agost de 1978, un grup
+de rangers (policia del parc) i naturalistes van enregistrar la durada de l'erupció i l'intèrval fins
+a la següent erupció (en minuts) de les erupcions del geyser Old Faithful, entre les 6 del matí i mitjanit.
+La intenció de l'estudi era predir l'hora de la següent erupció, per tal de posar-la al cartells del Centre
+de Visitants, de manera que els visitants del Parc de Yellowstone poguéssin administrar bé el seu temps."
+
+
+### Estudi de la relació entre Durada i Intèrval (continuació):
+
+Aquestes dades ja van ser introduïdes al Lab2. Començarem aquest Lab3 repetint algunes de les passes que ja vam fer. Entre d'altres, hauríeu de poder:
+
+(a) Representar el diagrama de dispersió de Intèrval respecte Durada en l'escala transformada (log).
+
+(b) Calcular la covariança i correlació mostrals.
+
+Una vegada realitzades aquestes primeres passes, introduïrem com:
+
+(c) Estimar la recta de regressió de mínims quadrats de l'Intèrval respecte la durada, en l'escala adequada (log). Realitzeu l'anàlisi complert: diagnòstic d'hipòtesis i interpretació de resultats. (Veure Secció [Interpretació complerta del model: pas a pas][Interpretació complerta del model: pas a pas]).
+
+A continuació, farem l'estudi de la relació entre Durada i Intèrval i complicarem el model. Veurem com:
+
+(d) Definir un factor que divideixi les durades en curtes i llargues. Preneu com a valor de referència els 3 minuts de durada, o els corresponents en logdurada.
+(e) Representar el diagrama de caixa dels logintèrvals entre erupcions segons les dues categories de logdurada definides.
+(f)  Ajustar la recta de regressió que assigna diferents ordenades a l'origen a les dues categories de logdurada. Realitzeu l'anàlisi complert: diagnòstic d'hipòtesis i interpretació de resultats. (Veure Secció [Interpretació complerta del model: pas a pas][Interpretació complerta del model: pas a pas]).
+(g)  Ajustar la recta de regressió que assigna diferents ordenades a l'origen i diferents pendents a les dues categories de logdurada. Realitzeu l'anàlisi complert: diagnòstic d'hipòtesis i interpretació de resultats. (Veure Secció [Interpretació complerta del model: pas a pas][Interpretació complerta del model: pas a pas]).
+
+Som-hi. Comencem el Lab3.
+
+## El model de regressió
+
+::: {.infobox .caution data-latex="{caution}"}
+**És imprescindible** haver llegit la secció de Regressió lineal simple del document
+
+**Introducció_Regressio_Lineal-GEC2020-2024-2025-s.pdf**
+
+:::
+
+##  Llibreries i lectura de dades
+
+Una vegada establert el directori de treball, començarem cridant les llibreries que necessitem a la sessió. A Lab1 es va fer la instal·lació de la llibreria `car`. Si per  algun motiu no la tens instal·lada, cal que revisis els continguts del Lab1. 
+
+```{r llibreries}
+library(car)
+library(nnet)
+```
+
+::: {.infobox .circle data-latex="{circle}"}
+
+***AVÍS!***
+
+Obriu el fitxer **"DadesGeyser.csv"** utilitzant el Bloc de notes.  
+Observeu el format del fitxer: com estan separades les columnes? amb tabulador,coma, punt i coma, espai?; Estan inclosos els noms de les variables? Hi ha files inicials amb comentaris?
+:::
+
+Llegim el conjunt de dades, tenint en compte la seva estructura, i li donem un nom. 
+
+
+::: {.infobox .caution data-latex="{caution}"}
+***IMPORTANT***: R diferencia majúscules i minúscules: *Dades* és diferent a *dades*.
+:::
+
+```{r lectura_dades, echo=TRUE}
+dadesgeyser <- read.table("DadesGeyser.csv",
+             header=TRUE, sep=";", na.strings="NA", dec=".", strip.white=TRUE)
+```
+Donat que les variables Durada i Intèrval són positives i tenen escala relativa, generem dues noves variables. Aplicarem el logaritme (natural, neperià) i guardarem les variables al dataframe.
+
+```{r}
+dadesgeyser$logdurada <- with(dadesgeyser, log(Durada))
+dadesgeyser$loginterval <- with(dadesgeyser, log(Interval))
+```
+
+# Introduïm un factor
+
+Els factors ens ajuden a afinar la descripció de les dades. En ocasions ja estan inclosos entre les variables. En d'altres ocasions, la primera observació de les dades ens permet definir-ne de nous.
+
+## Definim un factor
+
+Observant el diagrama de dispersió de les dues variables hem vist que hi ha dos núvols de punts. Sembla que les durades curtes es relacionen amb intèrvals curts i les durades llargues amb intèrvals llargs (amb una mica de soroll pel mig). Aprofitem aquesta observació per a definir una nova variable, que serà el factor "Durada curta".
+
+```{r, fig.cap="Scatterplot Intèrval vs Durada"}
+car::scatterplot(Interval~Durada, smooth=FALSE, regLine=FALSE, boxplots=FALSE, data=dadesgeyser)
+```
+
+Fem-ho per parts: 1) definim la variable indicador durada. Seleccionem les observacions amb una durada inferior a un valor donat. Aquesta és una condició lògica, que guardem com a numèrica i per si de cas, li donem forma de vector. Els 1 seran Intèrvals curts i els 0 seran intèrvals llargs. 2) Afegim aquest vector al nostre dataframe i 3) Li diem a R que aquest vector numèric de 0 i 1 en realitat és una variable qualitativa (factor), i que pot substituïr el 0 i 1 per l'etiqueta corresponent:
+
+::: {.infobox .caution data-latex="{caution}"}
+En les etiquetes és important respectar l'ordre. 0 correspon a llarg i 1 a curt
+:::
+
+```{r}
+indicadordurada <- as.vector((as.numeric(dadesgeyser[,"Durada"]>3)))
+
+dadesgeyser <- cbind(dadesgeyser, indicadordurada)
+
+dadesgeyser$indicadordurada <- factor(dadesgeyser$indicadordurada, labels=c('Durada curta','Durada llarga'))
+
+```
+### 🖊Exercici:Féu un summary del factor indicadordurada
+```{r exercici_summary, exercise=TRUE}
+```
+
+#  Estudi de la relació entre variables
+
+El món no és univariant. Abans d'estudiar les variables multivariants, podem descriure les relacions dos a dos entre variables. 
+
+## Scatterplots
+
+El diagrama de dispersió ens permet visualitzar la relació bivariant entre variables.
+
+La funció `scatterplot` de `car` ens permet realitzar aquesta representació. Representarem directament la versió sense línies extra i amb escala complerta:
+
+```{r, fig.cap="Modificació dels eixos del diagrama de dispersió per loginterval i logdurada"}
+car::scatterplot(loginterval~logdurada, smooth=FALSE, regLine=FALSE, boxplots=FALSE, data=dadesgeyser, xlim=c(0,1), ylim=c(0,4.5))
+```
+
+### 🖊Exercici: Quin eren els valors màxims i mínims de les variables? Cal modificar quelcom de la gràfica? Escriu el codi corresponent.
+```{r exercici_valorsmaxmin, exercise=TRUE}
+
+```
+
+## Mesura de la relació lineal
+
+Recordem que al Lab anterior vam calcular la covariància i la correlació de les dues variables.
+
+Recordem que el coeficient de correlació lineal de Pearson mesura la dependència _lineal_ de les variables. Ep! Cal anar en compte, perquè al llenguatge diari utilitzem correlació com a sinònim de dependència. El coeficient de correlació lineal de Pearson és una versió normalitzada de la covariància, que facilita la seva interpretació :
+
+\[
+r_{XY}=\frac{Cov(X,Y)}{\sqrt{Var[X]}\sqrt{Var[Y]}}  \ .
+\]
+
+Recordem que el coeficient pren valors entre [-1,1] i que si dues variables tenen correlació 0, diem que són *incorrelacionades*.
+
+Al diagrama de dispersió hem observat una certa dependència lineal entre les variables, però no perfecta. Calculem el corresponent coeficient de correlació de Pearson:
+
+```{r}
+cor(dadesgeyser[,c("logdurada","loginterval")], use="complete")
+```
+
+Observem que obtenim un valor de correlació mig-alt, que correspon al que havíem observat al gràfic.
+
+Existeixen d'altres coeficients de correlació (Kendall, Spearman), que mesuren dependències més generals. No els farem servir de moment.
+
+# Model de  Regressió lineal simple (mínims quadrats)
+
+Volem dibuixar la recta de regressió lineal de Y respecte a X utilitzant el mètode de mínims quadrats, $$  Y= \beta_0 + \beta_1 X $$.
+
+## Els coeficients per mínims quadrats 
+Podem obtenir l'expressió analítica dels coeficients $\beta_0$ (ordenada a l'origen) i $\beta_1$ (pendent) de la recta estimats amb el mètode de mínims quadrats:
+
+\[ 
+\beta_1= \frac{Cov(X,Y)}{Var[X]}  
+\]
+\[ 
+\beta_0= \bar{y}- \beta_1 \bar{x}
+\]
+
+Abans de calcular els coeficients que corresponen a les dades disponibles, calculem els valors intermitjos que necessitem:
+
+```{r}
+mean(dadesgeyser$logdurada)
+mean(dadesgeyser$loginterval)
+var(dadesgeyser$logdurada)
+var(dadesgeyser$loginterval)
+cov(dadesgeyser$logdurada, dadesgeyser$loginterval)
+```
+
+### 🖊Exercici: Calcula el pendent i l'ordenada a l'origen de la recta de regressió
+```{r exercici_pendentiordenada, exercise=TRUE}
+ 
+```
+
+### 🖊Exercici: Representa l'scatterplot de les dues variables i afegeix la recta de regressió utilitzant la instrucció `abline`.
+```{r exercici_regressio, exercise=TRUE}
+ 
+```
+
+##  Model lineal inicial i validació
+
+El model de regressió lineal simple complert des del punt de vista estadístic precisa d'una sèrie d'hipòtesis que ens permeten valorar si l'ajust és adequat i la qualitat de l'ajust lineal.
+
+Les hipòtesis del model lineal de mínims quadrats s'estableixen sobre els residus del model, és a dir, sobre la diferència entre les observacions de la variable predita i els valors predits pel model.
+
+És imprescindible valorar si es compleixen les hipòtesis d'aquest model. En els primers laboratoris realitzarem aquesta valoració gràficament. Més endavant ho completarem amb els anomenats contrastos d'hipòtesis.
+
+El pas a pas serà sempre el mateix: 1) Crida del model; 2) Verificació de les hipòtesis del model; 3) Si les hipòtesis es compleixen, interpretació del `summary` del model i 4) Nova iteració si es requereix algun canvi
+
+### Interpretació complerta del model: pas a pas 
+
+El model estadístic de regressió lineal (tant simple com múltiple) es basa en les hipòtesis sobre els residus. La validació d'aquestes hipòtesis és **imprescindible**. Si les hipòtesis no es compleixen, la interpretació posterior sobre el model no té sentit. 
+
+Pas a pas:
+
+(1) Genereu el model de regressió lineal múltiple usant R.
+(2) Comproveu si es compleixen les hipòtesis del model, la seva validesa i la qualitat de l'ajust:
+   
+      (a) Si hi ha dues o més variables predictores, comproveu si existeix colinealitat de les variables predictores. La colinealitat influeix en els contrastos d'hipòtesis posteriors. En cas de colinealitat, cal aplicar mètodes que l'evitin abans de continuar amb el procés d'ajust del model.
+      (b)	Comproveu les hipòtesis del model: Residus centrats, incorrelacionats  homocedàstics (amb la mateixa variança) i amb distribució normal. Podem realitzar la comprovació visualment mitjançant les gràfiques de diagnòstic del model. En cas de dubte, caldrà complementar amb els contrastos d'hipòtesi corresponents a cada hipòtesis del model. (En veurem alguns més endavant). Si no es compleix alguna de les hipòtesis, caldrà tenir-ho en compte de cara a les interpretacions posteriors. (Hi profunditzarem més endavant).
+      (c)	Verifiqueu si el model lineal té sentit. Contrast $F$.
+      (d) Verifiqueu si algun dels coeficients del model pot ser nul mitjançant els contrastos $t$. Si és el cas, torneu a general el model de regressió sense aquesta / aquestes variables.
+      (e)	Verifiqueu la qualitat del model. Taula ANOVA del model. Coeficient de determinació.
+   
+(3)	Escriviu l'equació del model lineal resultant, amb els coeficients estimats. Interpreteu el model.
+
+
+::: {.infobox .caution data-latex="{caution}"}
+Què passa si no es compleix alguna de les hipòtesis del model? Doncs que no es poden interpretar els resultats del summary amb confiança. En parlarem en un altre lab.
+
+Si la hipòtesis que no es compleix és la de normalitat, no podem interpretar correctament els $p$-valors intermitjos, però sí els que són molt grans o molt petits. És a dir, si el $p$-valor és 0.9, clarament no podem rebutjar la $H_0$; si el $p$-valor és 1*e-26, clarament rebutjarem $H_0$. Valors prop de 0.05 no els podrem decidir, perquè la distribució de l'estadístic no és la suposada.
+:::
+
+
+## El model de Regressió lineal simple per OldFaithful
+
+Volem predir el logintervar a partir de la logdurada, amb un model de regressió lineal simple estimat per mínins quadrats:
+
+```{r, LM0}
+LinearModel.0 <- lm(loginterval ~ logdurada, data=dadesgeyser)
+```
+
+Representem conjuntament els quatre gràfics de diagnòstic que ens proporciona R:
+
+```{r, fig.cap="Gràfics de diagnòstic del model de regressió simple loginterval ~ logdurada"}
+par(mfrow=c(2,2))
+  plot(LinearModel.0)
+par(mfrow=c(1,1))
+```
+
+Els interpretarem millor si els visualitzem un a un:
+
+### Gràfic 1: residus vs predits
+
+Amb el gràfic de  residus vs valors predits comprovarem visualment tres de les hipotesis: 1) residus centrats; 2) residus homocedàstics (igual variància) i 3) residus incorrelacionats:
+
+```{r, graf1, fig.cap="Gràfics de diagnòstic del model de regressió simple loginterval ~ logdurada"}
+plot(LinearModel.0, which=1)
+```
+
+Observant el gràfic, no podem rebutjar que els residus siguin centrats, homocedàstics i incorrelacionats.
+
+### Gràfic2: Normalitat
+```{r, graf2, fig.cap="Gràfics de diagnòstic del model de regressió simple loginterval ~ logdurada"}
+plot(LinearModel.0, which=2)
+```
+
+El `qqplot` és un gràfic que ens permet valorar si la distribució  de les dades, els residus del model en aquest cas, és similar a la distribució de referència, en aquest cas la distribució normal. El qqplot representa la funció de distribució de referència reescalada de manera que es converteix en una recta, i s'aplica la mateixa transformació a la funció de distribució mostral dels residus. Si els punts de la funció de distribució mostral segueixen la recta, direm que no podem rebutjar que la distribució de la variable és la de referència. En el nostre cas, que els residus tenen una distribució normal.
+
+El gràfic proporcionat per defecte es pot millorar afegint una banda de confiança. Aquest gràfic millorat es troba a la llibreria `car`.
+
+Quan generem el model lineal es generen quantitats d'interès a les que podem accedir: valors predits, coeficients, residus, entre d'altres. Podem treballar amb aquesta variable normalment. Per exemple, podem representar el seu histograma
+
+```{r, fig.cap="Histograma dels residus del model simple"}
+LinearModel.0$residuals
+hist(LinearModel.0$residuals)
+```
+
+O la funció de distribució empírica dels  residus, la que reescalem per a generar el qqplot:
+
+```{r, fig.cap="Funció de distribució empírica dels residus del model simple"}
+plot(ecdf(LinearModel.0$residuals))
+```
+
+### 🖊Exercici:
+```{r  residus-quiz, echo=FALSE}
+quiz(
+question("Els residus",
+    answer("Tenen una mitjana mostral aproximadament 0", correct = TRUE),
+    answer("Presenten un histograma simètric", correct = TRUE),
+    answer("El percentil 80 és aproximadament 0.1", correct = TRUE),
+    answer("Totes les opcions anteriors són correctes", correct = TRUE)
+    )
+   )    
+```
+
+Representarem el `qqPlot` dels residus. La banda de confiança que ens permet valorar si els punts allunyats de la referència són realment molt llunyans i aleshores rebutjar el model de referència:
+
+```{r, graf3b, fig.cap="qqPlot dels residus"}
+car::qqPlot(LinearModel.0$residuals)
+```
+
+Observant el gràfic, no podem rebutjar que la distribució dels residus sigui normal.
+
+### Gràfic3: Residus vs predits, reescalat
+
+Aquest gràfic complementa el gràfic de residus vs valors predits. El reescalat de l'eix de residus permet visualitzar millor (l'absència) incorrelació que al gràfic 1.
+
+```{r, graf3, fig.cap="Gràfics de diagnòstic del model de regressió simple loginterval ~ logdurada"}
+plot(LinearModel.0, which=3)
+```
+
+### Gràfic4: Leverage
+
+Aquest gràfic no forma part estrictament de la comprovació de les hipòtesis del model. Probablement es va afegir als gràfics per defecte per a completar els quatre, però resulta d'utilitat. verifiquem els punts influents, els punts *palanca*, en anglès *leverage points* i mesurem la seva influència. En general, no s'aconsella eliminar els punts influents, però cal ser conscients que ho són per a fer les interpretacions posteriors. Considerarem influents aquells valors que presenten una distància de Cook de 0.5 o superior.
+
+```{r, graf4,fig.cap="Gràfics de diagnòstic del model de regressió simple loginterval ~ logdurada"}
+plot(LinearModel.0, which=4)
+```
+
+Veient el gràfic, descartem que hi hagi valors influents que afectin el model.
+
+### El resum del model
+Un cop verificades les hipòtesis del model, podem procedir a interpretar el resum del model:
+
+```{r, summLM0}
+summary(LinearModel.0)
+```
+
+Cal observar
+
+(1) Contrast F:  cal verificar el valor del $p$-valor. En aquest cas, donat que el $p$-valor és molt petit, rebutgem la hipòtesis de "tots els coeficients del model excepte $\beta_0$ són nuls alhora". Per tant, *el model lineal té sentit*.
+
+(2) Contrastos $t$: cal verificar el valor del p-valor del test de cadascun dels coeficients. En aquest cas, donat que el $p$-valor és petit es rebutja que $\beta_0$ sigui nul i també es rebutja que $\beta_1$ sigui nul. Mantenim els dos coeficients al model.
+
+(3) Coeficient de determinació: $R^2 \in [0,1]$. Com més proper a 1, millor és l'ajust lineal del model. Hem obtingut un ajust bo.
+
+Observació: En el cas del model de regressió lineal simple, el coeficient de determinació és el quadrat del coeficient de correlació entre les varibles. Això no es compleix per models de regressió lineal múltiple.
+
+### 🖊Exercici:
+```{r  summaryM0-quiz, echo=FALSE}
+quiz(
+question("Al summary del Model0",
+    answer("El $p$-valor del contrast F és 2.2e-16", correct = TRUE),
+    answer("El coeficient de determinació és 0.7948", correct = TRUE),
+    answer("Rebutgem que el coeficient $\beta_0$ sigui nul", correct = TRUE),
+    answer("Totes les opcions anteriors són correctes", correct = TRUE)
+    )
+   )    
+```
+
+### Visualització del model estimat
+
+Podem representar la recta de regressió lineal simple estimada sobre de l'`scatterplot`. La instrucció `abline` ens permet cridar directament el model, o bé podríem proporcionar els paràmetres:
+
+```{r, fig.cap="Recta de regressió ajustada sobre scatterplot loginterval ~ logdurada"}
+scatterplot(loginterval~logdurada, xlim=c(0,1.8), ylim=c(0,5), regLine=FALSE, smooth=FALSE, boxplots=FALSE, data=dadesgeyser)
+abline(LinearModel.0, col=4)
+```
+
+#  Model de regressió afegint un factor
+
+En les representacions univariades vam veure que es podien visualitzar dos grups, corresponents a durades/intèrvals curts i llargs. Hem definit un factor per a representar aquesta característica. Ara utilitzarem el factor per a millorar el model de regressió lineal.
+
+Veiem que el logintèrval té característiques diferents segons la durada:
+
+```{r, fig.cap="Boxplot per a loginterval segons els dos grups definits per indicadordurada"}
+boxplot(loginterval~indicadordurada, ylab='loginterval', xlab='indDurada', data=dadesgeyser)
+```
+
+## Model de regressió amb factor. Interacció simple
+
+Establim un nou model de regressió lineal. Hi introduïm el factor, de manera que es podria considerar com a múltiple (més d'una variable predictora). Observem que introduïm l'indicador amb un + . Així l'indicador només afecta $\beta_0$, i per tant tindrem un $\beta_0$ per a cadascun dels nivells del factor (en aquest cas, un per les durades curtes i un altre per les durades llargues). Això correspon a generar dues rectes de regressió paral·leles, amb diferents ordenades a l'origen.
+
+```{r, LM1}
+LinearModel.1 <- lm(loginterval ~ logdurada + indicadordurada, data=dadesgeyser)
+```
+
+```{r, fig.cap="Gràfics de diagnòstic del model amb variable indicadora"}
+par(mfrow=c(2,2))
+plot(LinearModel.1)
+par(mfrow=c(1,1))
+```
+
+```{r, summaryLM1}
+summary(LinearModel.1)
+```
+
+::: {.infobox .caution data-latex="{caution}"}
+Ep! La sortida dels paràmetres estimats és heretada de programes més antics i és una mica embolicada.
+El model estimat és:
+\[
+loginterval =  \beta_{0_{ref}}+ \Delta \beta_{0_{altra}}+ \beta_{1}* logdurada
+\]
+
+A la sortida, el valor de l'intercept correspon al $\beta_{0_{ref}}$, l'ordenada a l'origen de la categoria de referència, que serà la primera per ordre alfabètic o bé la de número més baix si hem codificat amb números.  
+
+El valor $\beta_{0_{altra}}$ en realitat és el canvi $\Delta \beta_{0_{altra}}$, increment o decrement de $\beta_{0_{ref}}$ pel fet d'estar a l'altre nivell del factor. És a dir,
+$\beta_{0_{altra}}=\beta_{0_{ref}}+\Delta \beta_{0_{altra}}$.
+:::
+
+### 🖊Exercici:
+```{r  summaryM1-quiz, echo=FALSE}
+quiz(
+question("Al summary del Model1",
+    answer("El $p$-valor del contrast F és 2.2e-16", correct = TRUE),
+    answer("El coeficient de determinació del Model1 és lleugerament superior al del Model0", correct = TRUE),
+    answer("Rebutgem que el coeficient $\beta_0$ sigui nul", correct = TRUE),
+    answer("Totes les opcions anteriors són correctes", correct = TRUE)
+    )
+   )    
+```
+
+
+Representem l'`scatterplot` amb les rectes de regressió ajustades pels dos models:
+```{r, fig.cap="Scatterplot amb regressions per grups definits per indicadordurada"}
+scatterplot(loginterval~logdurada | indicadordurada, regLine=FALSE, smooth=FALSE, boxplots=FALSE, by.groups=TRUE, data=dadesgeyser)
+abline(LinearModel.0, col=1)
+abline(a=LinearModel.1$coeff[1], b=LinearModel.1$coeff[2], col=4)
+abline(a=LinearModel.1$coeff[1]+LinearModel.1$coeff[3], b=LinearModel.1$coeff[2], col=2)
+```
+
+##  Model amb interacció completa 
+
+El model lineal més complex que podem generar amb una variable predictora i un factor és el que inclou la interacció complerta. 
+
+Observem que introduïm l'indicador amb un * . Així l'indicador afecta $\beta_0$, i $\beta_1$ i per tant tindrem un $\beta_0$ per a cadascun dels nivells del factor (en aquest cas, un per les durades curtes i un altre per les durades llargues) i anàlogament per $\beta_1$. Això correspon a generar dues rectes de regressió amb diferents ordenades a l'origen i diferents pendents.
+
+```{r, LM2}
+LinearModel.2 <- lm(loginterval ~ logdurada * indicadordurada, data=dadesgeyser)
+```
+
+```{r, fig.cap="Gràfics de diagnòstic del model amb interacció logdurada * indicadordurada"}
+par(mfrow=c(2,2))
+plot(LinearModel.2)
+par(mfrow=c(1,1))
+```
+
+```{r, sumLM2}
+summary(LinearModel.2)
+```
+
+::: {.infobox .caution data-latex="{caution}"}
+Ep! La sortida dels paràmetres estimats segueix la lògica anterior. El model estimat és:
+\[
+loginterval =  \beta_{0_{ref}}+ \Delta \beta_{0_{altra(}}+ (\beta_{1_{ref}}+ \Delta \beta_{1_{altra}})* logdurada
+\]
+
+A la sortida, el valor de l'intercept correspon al $\beta_{0_{ref}}$, l'ordenada a l'origen de la categoria de referència, que serà la primera per ordre alfabètic o bé la de número més baix si hem codificat amb números. (Per a l'indicadordurada, el 0, durada curta, serà el valor de referència) 
+
+El valor $\beta_{0_{altra}}$ en realitat és el canvi $\Delta \beta_{0_{altra}}$, increment o decrement de $\beta_{0_{ref}}$ pel fet d'estar a l'altre nivell del factor. És a dir,
+$\beta_{0_{altra}}=\beta_{0_{ref}}+\Delta \beta_{0_{altra}}$. 
+Per $\beta_{1}$ tenim una situació similar.
+:::
+
+### 🖊Exercici:
+```{r  summaryM2-quiz, echo=FALSE}
+quiz(
+question("Al summary del Model2",
+    answer("El $p$-valor del contrast F és 2.2e-16", correct = TRUE),
+    answer("El coeficient de determinació del Model2 és lleugerament superior al del Model1", correct = TRUE),
+    answer("No podem rebutjar que els increments de $beta_0$ i $beta_1$ per a les durades llargues siguin nuls", correct = TRUE),
+    answer("Totes les opcions anteriors són correctes", correct = TRUE)
+    )
+   )    
+```
+
+
+Representem l'`scatterplot` amb les rectes de regressió ajustades pels tres models:
+```{r, fig.cap="Scatterplot amb regressions per grups definits per indicadordurada"}
+scatterplot(loginterval~logdurada | indicadordurada, regLine=FALSE, smooth=FALSE, boxplots=FALSE, by.groups=TRUE, data=dadesgeyser)
+abline(LinearModel.0, col=1)
+abline(a=LinearModel.1$coeff[1], b=LinearModel.1$coeff[2], col=4)
+abline(a=LinearModel.1$coeff[1]+LinearModel.1$coeff[3], b=LinearModel.1$coeff[2], col=2)
+abline(a=LinearModel.2$coeff[1], b=LinearModel.2$coeff[2], col=5)
+abline(a=LinearModel.2$coeff[1]+LinearModel.2$coeff[3], b=LinearModel.2$coeff[2]+LinearModel.2$coeff[4], col=3)
+```
+
+::: {.infobox .circle data-latex="{circle}"}
+Podríem millorar la representació canviat els paràmetres `lty` (tipus de traç), `lwd` (gruix del traç) de les representacions de les rectes de regressió. Ja vam veure alguns d'aquests arguments a labs anteriors.
+:::
+
+Si no necessitem comparar models visualment, podem utilitzar l'`scatterplot` condicionat pel factor:
+
+```{r, fig.cap="Relació entre logdurada i loginterval amb interacció per grups"}
+scatterplot(loginterval~logdurada | indicadordurada, smooth=FALSE, boxplots=FALSE, by.groups=TRUE, data=dadesgeyser)
+```
+
+##  Predicció
+
+Amb freqüència voldrem utilitzar el model ajustat per a realitzar prediccions. Caldrà generar un data frame amb la mateixa estructura que el df original, que contingui les observacions per a les que volem obtenir les prediccions. Obtindrem la predicció amb la instrucció `predict`
+
+```{r}
+valref<- c(2, 3) #tenim dos valors de referència 
+logdurades<-log(valref)
+indicadordurades<-c('Durada curta', 'Durada curta')
+
+valpred <- data.frame(logdurada=logdurades, indicadordurada=indicadordurades)
+logintervalPreditLM <- predict(LinearModel.2, valpred)
+IntervalPreditLM<-exp(logintervalPreditLM )
+prediccio <- data.frame(valref,valpred, logintervalPreditLM, IntervalPreditLM )
+prediccio
+```
+
+# Conclusió {-}
+
+Amb aquest apartat hem acabat l’anàlisi descriptiva i la introducció al model de regressió lineal simple complert amb les dades d'Old Faithful
+
+# References
+
+<div id="refs"></div>
+
+#  About / Canvis {-}
+
+Material creat per M. Ortego per les Assignatures de l'àmbit estadístic de l' ETSECCPB - UPC.
+
+Versió 1.0
+
+#  Crèdits {-}
+
+<a href="https://www.flaticon.com/free-icons/travel" title="travel icons">Travel icons created by IconBaandar - Flaticon</a>
+
+<a href="https://www.flaticon.com/free-icons/alert" title="alert icons">Alert icons created by Creatype - Flaticon</a>
+
+<a href="https://www.flaticon.com/free-icons/find" title="find icons">Find icons created by hqrloveq - Flaticon</a>
+
+<a href="https://www.flaticon.com/free-icons/eye" title="eye icons">Eye icons created by Freepik - Flaticon</a>
